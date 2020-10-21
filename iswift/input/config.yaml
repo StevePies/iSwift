@@ -1,0 +1,23 @@
+input_path: input/data
+dims_len: 5
+for_num: 3
+input_num: 30
+dims:
+    - DOMAIN
+    - province
+    - user_type
+    - os
+    - cdn_server
+
+sp_param:
+    A: 0.1
+    B: 1
+
+cut_threshold: 0.001
+topK: 350
+
+con_combine_thr: 0.05
+
+recomm_threshold: 
+    confidence: 0.5
+    support: 0.001

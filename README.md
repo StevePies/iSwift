@@ -1,4 +1,4 @@
-# iSwift: Fast Impact Identification and Traffic Switching for Large-scale CDNs
+# iSwift: Fast Impact Identification for Large-scale CDNs
 
 ## Dataset
 The datasets are put in the folder iswift/input/. There are totally 60 folders under the input folder, where each folder contains a dataset with different anomaly detection accuracies. 

@@ -1,23 +1,18 @@
 input_path: input/data
-dims_len: 5
+dims_len: 5 #the number of attributes
 for_num: 3
-input_num: 30
-dims:
-    - DOMAIN
-    - province
-    - user_type
-    - os
-    - cdn_server
+input_num: 60
+dims:    #the attributes
+    - DOMAIN   #the visited web domain
+    - province  #the user location
+    - user_type  #the access network type
+    - os #the user client type
+    - cdn_server #the requested CDN edge server
 
-sp_param:
-    A: 0.1
-    B: 1
+cut_threshold: 0.001  #the default latent force
+topK: 350  #the default search width
 
-cut_threshold: 0.001
-topK: 350
-
-con_combine_thr: 0.05
+con_combine_thr: 0.08  #the default confidence loss
 
 recomm_threshold: 
-    confidence: 0.5
-    support: 0.001
+    confidence: 0.5  #the default confidence

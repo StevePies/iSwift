@@ -11,11 +11,7 @@ import datetime
 config_file = open('config.yaml')
 config = yaml.load(config_file,Loader=yaml.FullLoader)
 
-
-A = config['sp_param']["A"]
-B = config['sp_param']["B"]
 conTHR = config['recomm_threshold']['confidence']
-supTHR = config['recomm_threshold']['support']
 filepath = config['input_path']
 dims_len = config['dims_len']
 
@@ -47,7 +43,6 @@ def read_file(local_filepath):
                     continue
                 line[dims_len]=int(float(line[dims_len]))
                 line[dims_len+1]=int(float(line[dims_len+1]))
-                #ix = str(line[0])
                 key=tuple(line[0:dims_len])
                 value = tuple(line[-2:])
                 data_dict[key]=value
@@ -69,6 +64,8 @@ def read_file(local_filepath):
                     print("root-cause info",key, latent_force_temp, confidence_set_temp, support_temp,error_item)
                 
     return data_dict,start_dict,layer_dict,root_cause
+    
+#get the candidates    
 def search_Tree(data_dict,start_dict,layer_dict):
     latent_force = {}
     confidence_set = {}
@@ -76,33 +73,33 @@ def search_Tree(data_dict,start_dict,layer_dict):
     search_set={}
     recommond_list=[]
     global search_step
-    for item in start_dict:
+    for item in start_dict:  #search the nodes at the 1th layer
         search_step = search_step + 1
         error = start_dict[item][1]
         normal = start_dict[item][0]
 
         latent_force[item]=error/(error_item)
         confidence_set[item]=error/(error+normal)
-        sp_set[item] = A*latent_force[item]+B*confidence_set[item]
-        if(latent_force[item]<config['cut_threshold']):
+        sp_set[item] = latent_force[item]+confidence_set[item]
+        if(latent_force[item]<config['cut_threshold']): #prun by latent force
             continue
-        search_set[item]=sp_set[item] #第一层用latent_force剪枝之后
+        search_set[item]=sp_set[item] 
 
-        if(latent_force[item] > supTHR and confidence_set[item]> conTHR):
+        if(confidence_set[item]> conTHR): 
             conf_avg = subNodeCalc(item,layer_dict,data_dict)
-            if (abs(confidence_set[item] - conf_avg) < config["con_combine_thr"]):
+            if (abs(confidence_set[item] - conf_avg) < config["con_combine_thr"]): #select by confidence loss
                 recommond_list.append(item)
                 removeChildfromList(item,layer_dict,data_dict)
             else:
                 continue
-    print("第1层的search_set大小："+str(len(search_set)))
+   
     search_set_sorted= sorted(search_set.items(), key=lambda item:item[1], reverse=True)
     Candidate_list = getCandidateList(search_set_sorted,search_set)
     search_set.clear()
 
     for loop in range(2,config['for_num']+2):
             for item in Candidate_list:
-                #calc support confidence_set sp_set
+                
                 if(item not in data_dict.keys()):
                     continue
                 abnormal = data_dict[item][1]
@@ -110,13 +107,13 @@ def search_Tree(data_dict,start_dict,layer_dict):
                 search_step = search_step + 1
                 latent_force[item]=abnormal/(error_item)
                 confidence_set[item]=abnormal/(abnormal+normal)
-                sp_set[item] = A*latent_force[item]+B*confidence_set[item]
+                sp_set[item] = latent_force[item]+confidence_set[item]
 
                 if(latent_force[item]<config['cut_threshold']):
                     continue
                 search_set[item]=sp_set[item]
                 
-                if(latent_force [item] > supTHR and confidence_set[item]> conTHR):
+                if(confidence_set[item]> conTHR):
                     conf_avg = subNodeCalc(item,layer_dict,data_dict)
                     if (abs(confidence_set[item] - conf_avg) < config["con_combine_thr"]):
                         recommond_list.append(item)
@@ -129,6 +126,7 @@ def search_Tree(data_dict,start_dict,layer_dict):
             search_set.clear()
     return latent_force,confidence_set,recommond_list
 
+#filter the candidates by pod score
 def make_pod(recommond_list,latent_force):
     pod_dict = {}
     for recom in recommond_list:
@@ -140,7 +138,6 @@ def make_pod(recommond_list,latent_force):
                 rx = rx + str(i)
             if(i < len(recom)-1):
                 rx = rx + ","
-        #print(rx)
         if( rx not in pod_dict.keys() ):
             pod_dict[rx] = []
         pod_dict[rx].append(recom)
@@ -162,7 +159,8 @@ def make_pod(recommond_list,latent_force):
         j = j + 1
         print("recommend",j,item[0],item[1],pod_dict[item[0]])
     return pod_dict,pod_filter_sorted
-    
+
+#calculate the performance  
 def calc_f1(pod_dict,pod_filter_sorted,root_cause_list,dims_list_num):
     tn_num = 0
     if(len(pod_filter_sorted)==0) :
@@ -180,23 +178,23 @@ def calc_f1(pod_dict,pod_filter_sorted,root_cause_list,dims_list_num):
         tn_num = dims_list_num - len(rcmd) - len(fn)
 
     return tp,fp,fn,tn_num
-    
+
+#search root-cause set M_opt
 def fbeem(indexxx,local_filepath):
     global search_step
     starttime = datetime.datetime.now()
     data_dict,start_dict,layer_dict,root_cause = read_file(local_filepath)
     dims_list_num = len(data_dict)
-    #search the whole tree
+    #get the candidates
     latent_force,confidence_set,recommond_list = search_Tree(data_dict,start_dict,layer_dict)
 
     endtime = datetime.datetime.now()
-    #recommond to pod with score
+    #candidates filtering
     pod_dict,pod_filter_sorted = make_pod(recommond_list,latent_force)
-    #calc the perference
+   
     tp,fp,fn,tn_num=calc_f1(pod_dict,pod_filter_sorted,root_cause,dims_list_num)
-    print("perference", indexxx, str(len(tp)), str(len(fp)), str(len(fn)), str(tn_num), search_step,(endtime - starttime).seconds)
+    print("performance", indexxx, str(len(tp)), str(len(fp)), str(len(fn)), str(tn_num), search_step,(endtime - starttime).seconds)
 
-#TODO
 
 def quick_sort(nums,latent_force):
     n = len(nums)
@@ -211,7 +209,7 @@ def quick_sort(nums,latent_force):
             right.append(nums[i])         
     return quick_sort(left,latent_force)+[nums[0]]+quick_sort(right,latent_force)
 
-            
+#prun the subgraph nodes         
 def removeChildfromList(_list,layer_dict,data_dict):
     global search_step
     layer = dims_len-_list.count("*")
@@ -226,7 +224,7 @@ def removeChildfromList(_list,layer_dict,data_dict):
                 if (item in data_dict.keys()):
                     data_dict.pop(item)
 
-
+#get the expand set
 def getCandidateList(search_set_sorted,search_set):
     global search_step
     i=0
@@ -263,7 +261,7 @@ def getCandidateList(search_set_sorted,search_set):
     
     return result
 
-
+#get the children nodes 
 def subNodeCalc(_list, layer_dict, data_dict):
     global search_step
     conf_avg = 0
@@ -300,11 +298,9 @@ def subNodeCalc(_list, layer_dict, data_dict):
 
 
 if __name__ == "__main__":
-
-
     for i in range(0, config["input_num"]):
         search_step=0
-        error_item=0
+        error_item=0  #the total number of abnormal leaf nodes of search graph T
         item_cnt=0
         print(i,": ++++++++++++++++++++++")
         local_filepath = filepath + str(i) + "/"
